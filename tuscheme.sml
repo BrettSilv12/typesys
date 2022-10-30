@@ -1608,11 +1608,40 @@ fun typeof (e, k_env, ty_env) =
       | ty (VAR (x)) = find (x, ty_env)
       | ty (APPLY(e, es)) = 
         let
-          val formals = case (ty e) of
+          val formals = case ty e of
                         (CONAPP (TYCON "function", 
                           [CONAPP (TYCON "argtuple", args), _])) => args
-                      | _ => raise TypeError "invalid formals in apply function"
-
+                      | _ => raise TypeError 
+                                      "invalid formals in apply function"
+          val result = case ty e of 
+                        (CONAPP (TYCON "function", 
+                          [CONAPP (TYCON "argtuple", _), result])) => result
+                      | _ => raise TypeError 
+                                      "invalid result type in apply function"
+          val t_list = map ty es
+        in if formals = t_list
+            then result
+            else raise TypeError "type mismatch in APPLY function"
+        end
+      | ty (LETX (LET, es, e)) = 
+        let
+          fun bind_ne ((name, exp), env) = bind (name, typeof 
+                                                      (exp, k_env, env), env)
+          val new_ty_env = foldl bind_ne ty_env es
+        in typeof (e, k_env, new_ty_env)
+        end
+        (*
+      | ty (LAMBDA)
+      | ty (SET)
+      | ty (WHILE)
+      | ty (BEGIN)
+      *)
+      | ty (LETX (LETSTAR, [], e)) = ty e
+      | ty (LETX (LETSTAR, (x::xs), e)) = ty (LETX (LET, [x], 
+                                                   LETX (LETSTAR, xs, e)))
+      (*************************)
+      (*ty (LETX (LETREC, ...))*)
+      (*************************)
       | ty _ = raise TypeError "not accounted for"
   in ty e
   end
@@ -1623,7 +1652,7 @@ fun typdef (d, k_env, ty_env) =
   case d of
       VAL (x, e) => (bind (x, typeof (e, k_env, ty_env), ty_env), 
                   typeString (typeof (e, k_env, ty_env)))
-    | VALREC (name, t, e) =>
+    | VALREC (name, t, e) => (* more work needed to ensure right side is LAMBDA??*)
         let
           val new_ty_env = bind(name, t, ty_env)
           val t_e = typeof(e, k_env, new_ty_env)
