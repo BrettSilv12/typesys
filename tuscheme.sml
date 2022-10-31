@@ -1630,12 +1630,37 @@ fun typeof (e, k_env, ty_env) =
           val new_ty_env = foldl bind_ne ty_env es
         in typeof (e, k_env, new_ty_env)
         end
-        (*
-      | ty (LAMBDA)
-      | ty (SET)
-      | ty (WHILE)
-      | ty (BEGIN)
-      *)
+      | ty (LAMBDA (xs, e)) = 
+        let
+          val kind_check = foldl (fn ((name, typ), body) => kindof 
+                                                            (typ, k_env) = 
+                                                    TYPE andalso body) true xs
+          fun bind_nt ((name, typ), env) = bind (name, typ, env)
+          val new_ty_env = foldl bind_nt ty_env xs
+          val result_t = typeof (e, k_env, new_ty_env)
+        in if kind_check
+            then FUNTY(map (fn ((name, typ)) => typ) xs, result_t)
+            else raise TypeError "invalid kinds used in lambda evaluation"
+        end 
+      | ty (SET (x, e)) = 
+        let
+          val t1 = ty (VAR x)
+          val t2 = ty e
+        in if eqType(t1, t2)
+            then t1
+            else raise TypeError "Set operation has type mismatch"
+        end
+      | ty (WHILEX (e1, e2)) =
+        let 
+          val t1 = ty e1
+          val t2 = ty e2
+        in if eqType(t1, booltype)
+            then unittype
+            else raise TypeError 
+                            "condition of while expression must be type BOOL"
+        end
+      | ty (BEGIN ([])) = unittype
+      | ty (BEGIN (es)) = foldl (fn (e, typ) => ty e) unittype es
       | ty (LETX (LETSTAR, [], e)) = ty e
       | ty (LETX (LETSTAR, (x::xs), e)) = ty (LETX (LET, [x], 
                                                    LETX (LETSTAR, xs, e)))
