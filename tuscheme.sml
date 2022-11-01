@@ -1667,6 +1667,14 @@ fun typeof (e, k_env, ty_env) =
       (*************************)
       (*ty (LETX (LETREC, ...))*)
       (*************************)
+      | ty (TYLAMBDA (xs, e)) = 
+        let
+          fun bind_nt (name, env) = bind(name, TYPE, env)
+          val new_k_env = foldl bind_nt k_env xs 
+          val t = typeof (e, new_k_env, ty_env)
+        in FORALL(xs, t)
+        end
+      | ty (TYAPPLY (e, ts)) = instantiate (ty e, ts, k_env)
       | ty _ = raise TypeError "not accounted for"
   in ty e
   end
@@ -2468,7 +2476,7 @@ val primBasis =
                                    ,  FORALL (["'a"], FUNTY ([listtype tvA],
                                                               listtype tvA))) ::
 
-
+                            (*ARRAY.MAKE*)
                            (* primitive functions for \tuscheme\ [[::]] S400b *)
                              ("<", intcompare op <, comptype) :: 
                              (">", intcompare op >, comptype) ::
