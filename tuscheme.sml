@@ -1608,20 +1608,18 @@ fun typeof (e, k_env, ty_env) =
       | ty (VAR (x)) = find (x, ty_env)
       | ty (APPLY(e, es)) = 
         let
-          val formals = case ty e of
-                        (CONAPP (TYCON "function", 
-                          [CONAPP (TYCON "argtuple", args), _])) => args
-                      | _ => raise TypeError 
-                                      "invalid formals in apply function"
-          val result = case ty e of 
-                        (CONAPP (TYCON "function", 
-                          [CONAPP (TYCON "argtuple", _), result])) => result
-                      | _ => raise TypeError 
-                                      "invalid result type in apply function"
           val t_list = map ty es
-        in if formals = t_list
-            then result
-            else raise TypeError "type mismatch in APPLY function"
+          val outtype = case ty e of
+                        (FUNTY(inputlist, out)) => out
+                      | _ => raise TypeError 
+                                      "invalid formal types in apply function"
+          val formtype = case ty e of
+                        (FUNTY(inputlist, out)) => inputlist
+                      | _ => raise TypeError
+                                      "invalid result type in apply function"          
+        in if formtype = t_list
+            then outtype
+            else raise TypeError "invalid apply format"
         end
       | ty (LETX (LET, es, e)) = 
         let
@@ -1664,9 +1662,25 @@ fun typeof (e, k_env, ty_env) =
       | ty (LETX (LETSTAR, [], e)) = ty e
       | ty (LETX (LETSTAR, (x::xs), e)) = ty (LETX (LET, [x], 
                                                    LETX (LETSTAR, xs, e)))
-      (*************************)
-      (*ty (LETX (LETREC, ...))*)
-      (*************************)
+      (*LETREC ON P. 373*) (*~does letstar and stores body~*)
+      | ty (LETRECX (es, e)) = 
+        (* es -> list of (ni ti) le 
+          1. ti asType
+          2. bind(ni, ti, env)
+          3. check le as FUNCTY
+          4. type of le out equals t1
+        *)
+        
+        
+        
+        
+        
+        
+        
+        let
+          fun bind_ne ((name, exp), env) = bind (name, typeof 
+                                                      (exp, k_env, env), env)
+          val new_ty_env = foldl bind_ne ty_env es
       | ty (TYLAMBDA (xs, e)) = 
         let
           fun bind_nt (name, env) = bind(name, TYPE, env)
@@ -1675,7 +1689,7 @@ fun typeof (e, k_env, ty_env) =
         in FORALL(xs, t)
         end
       | ty (TYAPPLY (e, ts)) = instantiate (ty e, ts, k_env)
-      | ty _ = raise TypeError "not accounted for"
+      | ty _ = raise TypeError "expression does not exist"
   in ty e
   end
 
