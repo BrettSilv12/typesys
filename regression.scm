@@ -27,6 +27,7 @@
 (check-type (+ 3 4) int)
 (check-type ((if #t + -) 3 5) int)
 (check-type ([@ cons int] 5 '(6)) (list int))
+(check-type (- 7 (+ 3 4)) int)
 (check-type-error ((if #f + 3) 3 5))
 (check-type-error (+ 1 #t)) 
 
@@ -63,15 +64,29 @@
 (check-type-error (let* ((x 5) (y #t)) (+ x y)))
 
 ;; step 15 - LETREC
+(check-type
+    (letrec ([(plus : (int int -> int)) (lambda ([a : int] [b : int]) (+ a b))]
+             [(minus : (int int -> int)) (lambda ([a : int] [b : int]) (- a b))]
+            ) 
+            (minus 7 (plus 3 4))
+    )
+int)
+
+(check-type-error
+    (letrec ([(double : (int -> int)) 3]) (double 3)))
+
+(check-type
+    (letrec ([(double : (int -> int)) (lambda ([a : int]) (* a 2))]) (double 3))
+int)
 
 ;; step 16 - VALREC, DEFINE
 
 (define int functionname ([x : int]) (+ x 3))
 (define int functionname2 ([x : int] [y : int]) (* x y))
-(define int functionname3 ([x : int] [y : sym]) (+ x y))
+; (define int functionname3 ([x : int] [y : sym]) (+ x y))
 (check-type functionname (int -> int))
 (check-type functionname2 (int int -> int))
-(check-type-error functionname3)
+(check-type-error (lambda ([a : int] [b : sym]) (+ a b)))
 ;; step 17 - TYAPPLY, TYLAMBDA
 
 

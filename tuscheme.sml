@@ -1664,23 +1664,17 @@ fun typeof (e, k_env, ty_env) =
                                                    LETX (LETSTAR, xs, e)))
       (*LETREC ON P. 373*) (*~does letstar and stores body~*)
       | ty (LETRECX (es, e)) = 
-        (* es -> list of (ni ti) le 
-          1. ti asType
-          2. bind(ni, ti, env)
-          3. check le as FUNCTY
-          4. type of le out equals t1
-        *)
-        
-        
-        
-        
-        
-        
-        
-        let
-          fun bind_ne ((name, exp), env) = bind (name, typeof 
-                                                      (exp, k_env, env), env)
-          val new_ty_env = foldl bind_ne ty_env es
+          let
+            fun check_tyex (((name, tyex), exp)) = asType(tyex, k_env)
+            val pass_tyex_check = map check_tyex es
+            fun bind_ne (((name, tyex), exp), env) = bind (name, tyex, env)
+            val new_ty_env = foldl bind_ne ty_env es
+            fun check_exp_tyex (((name, tyex), exp), checked) = case exp of (LAMBDA (es, e)) => eqType (tyex, typeof (exp, k_env, new_ty_env))
+                                                                              | _ => raise TypeError "right hand is not lambda"
+            val pass_check_exp_tyex = foldl check_exp_tyex true es
+          in if pass_check_exp_tyex then typeof (e, k_env, new_ty_env)
+              else raise TypeError "invalid letrec expression"
+          end
       | ty (TYLAMBDA (xs, e)) = 
         let
           fun bind_nt (name, env) = bind(name, TYPE, env)
@@ -1689,7 +1683,7 @@ fun typeof (e, k_env, ty_env) =
         in FORALL(xs, t)
         end
       | ty (TYAPPLY (e, ts)) = instantiate (ty e, ts, k_env)
-      | ty _ = raise TypeError "expression does not exist"
+      (* | ty _ = raise TypeError "expression does not exist" *)
   in ty e
   end
 
