@@ -80,15 +80,25 @@ int)
 int)
 
 ;; step 16 - VALREC, DEFINE
-
 (define int functionname ([x : int]) (+ x 3))
 (define int functionname2 ([x : int] [y : int]) (* x y))
-; (define int functionname3 ([x : int] [y : sym]) (+ x y))
 (check-type functionname (int -> int))
 (check-type functionname2 (int int -> int))
 (check-type-error (lambda ([a : int] [b : sym]) (+ a b)))
-;; step 17 - TYAPPLY, TYLAMBDA
 
+;; step 17 - TYAPPLY, TYLAMBDA
+(check-type ([@ cons int] 5 '(6)) (list int))
+(check-type ([@ = int] 5 5) bool)
+(check-type-error ([@ = faketype] 5 5))
+
+(val equals?
+    (type-lambda ('a)
+        (lambda ([x : 'a] [y : 'a])
+            ([@ = 'a] x y))))
+(check-type equals?  (forall ['a] ('a 'a -> bool)))
+(check-type-error (type-lambda ('a 'b)
+                    (lambda ([x : 'a] [y : 'b])
+                        ([@ = 'a] x y))) )
 
 ;; step 18 - LITERAL(PAIR), LITERAL(NIL)
 (check-type '(a b c d e f g h) (list sym))
