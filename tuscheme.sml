@@ -1146,6 +1146,7 @@ val symtype  = TYCON "sym"
 val unittype = TYCON "unit"
 val tvA      = TYVAR "'a"
 fun listtype ty = CONAPP (TYCON "list",[ty])
+fun arraytype ty = CONAPP (TYCON "array",[ty])
 (* type declarations for consistency checking *)
 val _ = op inttype   : tyex
 val _ = op booltype  : tyex
@@ -1153,6 +1154,7 @@ val _ = op symtype   : tyex
 val _ = op unittype  : tyex
 val _ = op tvA       : tyex
 val _ = op listtype  : tyex -> tyex
+val _ = op arraytype : tyex -> tyex
 (* types for {\tuscheme} S394c *)
 fun typeString (TYCON c) = c
   | typeString (TYVAR a) = a
@@ -1683,7 +1685,7 @@ fun typeof (e, k_env, ty_env) =
         in FORALL(xs, t)
         end
       | ty (TYAPPLY (e, ts)) = instantiate (ty e, ts, k_env)
-      (* | ty _ = raise TypeError "expression does not exist" *)
+      (*| ty _ = raise TypeError "expression does not exist" *)
   in ty e
   end
 
@@ -2397,11 +2399,14 @@ val _ = op processXDef       : xdef * basis -> basis
 (* shared utility functions for building primitives in languages with type checking S389d *)
 fun binaryOp f = (fn [a, b] => f (a, b) | _ => raise BugInTypeChecking "arity 2"
                                                                                )
+fun threeOp f = (fn [a, b, c] => f (a, b, c) | _ => raise BugInTypeChecking "arity 3"
+                                                                               )
 fun unaryOp  f = (fn [a]    => f a      | _ => raise BugInTypeChecking "arity 1"
                                                                                )
 (* type declarations for consistency checking *)
 val _ = op unaryOp  : (value         -> value) -> (value list -> value)
 val _ = op binaryOp : (value * value -> value) -> (value list -> value)
+val _ = op threeOp  : (value * value * value -> value) -> (value list -> value)
 (* shared utility functions for building primitives in languages with type checking S389e *)
 fun arithOp f =
       binaryOp (fn (NUM n1, NUM n2) => NUM (f (n1, n2)) 
@@ -2446,7 +2451,8 @@ val primBasis =
                      ("bool", TYPE) ::
                      ("sym",  TYPE) ::
                      ("unit", TYPE) ::
-                     ("list", ARROW ([TYPE], TYPE)) :: [])
+                     ("list", ARROW ([TYPE],  TYPE)) :: 
+                     ("array", ARROW ([TYPE], TYPE)) :: [])
       fun addPrim ((name, prim, funty), (types, values)) = 
         ( bind (name, funty, types)
         , bind (name, ref (PRIMITIVE prim), values)
@@ -2484,7 +2490,32 @@ val primBasis =
                                    ,  FORALL (["'a"], FUNTY ([listtype tvA],
                                                               listtype tvA))) ::
 
-                            (*ARRAY.MAKE*)
+                           (* array functions for pt A *)
+                            ("Array.make", binaryOp (fn (NUM n, v) => 
+                                              if n > 0
+                                              then makeArray (n, v)
+                                              else raise TypeError 
+                                                "array can not have negative size"
+                                          | _  => raise TypeError 
+                                          "invalid types passed to array constructor"),
+                                        FORALL (["'a"], FUNTY ([inttype, tvA], tvA))) ::
+                            ("Array.size", unaryOp (fn (ARRAY a) => 
+                                              arrayLength a 
+                                          | _ => raise TypeError 
+                                          "Array.size must be called on an Array"),
+                                        FORALL (["'a"], FUNTY ([tvA], inttype)))::
+                            ("Array.at", binaryOp (fn (ARRAY a, NUM i) =>
+                                              arrayAt (a, i)
+                                          | _ => raise TypeError
+                                          "invalid parameters for Array.at"), 
+                                        FORALL (["'a"], FUNTY ([tvA, inttype], tvA))) ::
+                            ("Array.put", threeOp (fn (ARRAY a, NUM i, v) => 
+                                              (arrayAtPut (a, i, v);
+                                              unitVal)
+                                          | _ => raise TypeError
+                                          "invalid parameters for Array.put"),
+                                        FORALL (["'a"], FUNTY ([tvA, inttype, tvA], unittype))) ::
+
                            (* primitive functions for \tuscheme\ [[::]] S400b *)
                              ("<", intcompare op <, comptype) :: 
                              (">", intcompare op >, comptype) ::
