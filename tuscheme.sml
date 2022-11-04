@@ -2498,23 +2498,23 @@ val primBasis =
                                                 "array can not have negative size"
                                           | _  => raise TypeError 
                                           "invalid types passed to array constructor"),
-                                        FORALL (["'a"], FUNTY ([inttype, tvA], arrayType tvA))) ::
+                                        FORALL (["'a"], FUNTY ([inttype, tvA], arraytype tvA))) ::
                             ("Array.size", unaryOp (fn (ARRAY a) => 
                                               arrayLength a 
                                           | _ => raise TypeError 
                                           "Array.size must be called on an Array"),
-                                        FORALL (["'a"], FUNTY ([tvA], inttype)))::
+                                        FORALL (["'a"], FUNTY ([arraytype tvA], inttype)))::
                             ("Array.at", binaryOp (fn (ARRAY a, NUM i) =>
                                               arrayAt (a, i)
                                           | _ => raise TypeError
                                           "invalid parameters for Array.at"), 
-                                        FORALL (["'a"], FUNTY ([tvA, inttype], tvA))) ::
+                                        FORALL (["'a"], FUNTY ([arraytype tvA, inttype], tvA))) ::
                             ("Array.put", threeOp (fn (ARRAY a, NUM i, v) => 
                                               (arrayAtPut (a, i, v);
                                               unitVal)
                                           | _ => raise TypeError
                                           "invalid parameters for Array.put"),
-                                        FORALL (["'a"], FUNTY ([tvA, inttype, tvA], unittype))) ::
+                                        FORALL (["'a"], FUNTY ([arraytype tvA, inttype, tvA], unittype))) ::
 
                            (* primitive functions for \tuscheme\ [[::]] S400b *)
                              ("<", intcompare op <, comptype) :: 
