@@ -1356,30 +1356,42 @@ fun typeof (e, globals, functions, formals) =
 
 (* function [[ty]], checks type of expression, given $\itenvs$ ((prototype)) 357 *)
       | ty (AAT (a, i))        = 
-          let val t1 = ARRAYTY(ty a)
-              val t2 = ty i
-          in if eqType(ty i, INTTY)
-              then t1
-              else raise TypeError "Invalid Index parameter"
-          end
-      | ty (APUT (a, i, e))    = 
-          let val t1 = ARRAYTY(ty a)
-              val t2 = ty i 
-              val t3 = ty e
-          in if eqType(t2, INTTY) andalso eqType(t1, t3)
-                then t1
-                else raise TypeError "Invalid Put parameter types"
+          let
+            val ta = ty a
+            val ti = ty i
+          in 
+            (case ta of
+              (ARRAYTY t1) => if eqType (ty i, INTTY) 
+                              then t1 
+                              else raise TypeError "Invalid index type"
+              | _ => raise TypeError "Not an array")
+            end
+      | ty (APUT (a, i, e))    =
+          let
+            val ta = ty a
+            val ti = ty i 
+            val te = ty e
+          in
+            (case ta of
+              (ARRAYTY t1) => if eqType (ti, INTTY) andalso eqType (te, t1)
+                              then t1
+                              else raise TypeError "Invalid index type or element type"
+              | _ => raise TypeError "Not an array")
           end
       | ty (AMAKE (len, init)) = 
           let val t1 = ty len
               val t2 = ty init
-          in if eqType(t1, INTTY)
+          in if eqType (t1, INTTY)
                 then ARRAYTY t2
                 else raise TypeError "Invalid Length parameter"
           end
       | ty (ASIZE a)           = 
-          let val t = ARRAYTY (ty a)
-          in INTTY
+          let 
+            val ta = ty a 
+          in 
+            (case ta of
+              (ARRAYTY t1) => INTTY 
+              | _ => raise TypeError "Not an array")
           end
 (* type declarations for consistency checking *)
 val _ = op eqType  : ty      * ty     -> bool

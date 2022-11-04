@@ -2498,7 +2498,7 @@ val primBasis =
                                                 "array can not have negative size"
                                           | _  => raise TypeError 
                                           "invalid types passed to array constructor"),
-                                        FORALL (["'a"], FUNTY ([inttype, tvA], tvA))) ::
+                                        FORALL (["'a"], FUNTY ([inttype, tvA], arrayType tvA))) ::
                             ("Array.size", unaryOp (fn (ARRAY a) => 
                                               arrayLength a 
                                           | _ => raise TypeError 
