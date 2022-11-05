@@ -1581,99 +1581,81 @@ val _ = op eqTypes : tyex list * tyex list -> bool
 (*                                                               *)
 (*****************************************************************)
 
+fun literal (NUM n) = inttype
+  | literal (BOOLV b) = booltype 
+  | literal (SYM s) = symtype
+  | literal (PAIR (e, NIL)) = listtype (literal e)
+  | literal (PAIR (e1, e2)) = 
+      (case (literal e1) of 
+        t1 => if eqType (listtype t1, literal e2)
+                         then listtype t1
+                         else raise TypeError "mixed types in a list")
+  | literal (NIL) = FORALL(["'a"], listtype tvA)
+  | literal _ = raise TypeError "non-literal"
+
 (* type checking for {\tuscheme} ((prototype)) 375 *)
 fun typeof (e, k_env, ty_env) = 
   let
-    fun ty (LITERAL (NUM (n))) = inttype
-      | ty (LITERAL (BOOLV (n))) = booltype
-      | ty (LITERAL (SYM (n))) = symtype
-      | ty (LITERAL (NIL)) = FORALL(["'a"], listtype (TYVAR "'a"))
-      | ty (LITERAL (PAIR (v, NIL))) = listtype (ty (LITERAL v))
-      | ty (LITERAL (PAIR (v1, v2))) = 
-            let
-              val t1 = ty (LITERAL v1)
-              val t2 = ty (LITERAL v2)
-            in if eqType(listtype t1, t2)
-                then t2
-                else raise TypeError "list types must be homogeneous"
-            end
-      | ty (LITERAL (_)) = raise TypeError "invalid type"
+    fun ty (LITERAL e) = literal e
       | ty (IFX (e1, e2, e3)) = 
-        let 
-          val t1 = ty e1
-          val t2 = ty e2
-          val t3 = ty e3
-        in if eqType(t1, booltype) andalso eqType(t2, t3)
-            then t2
-            else raise TypeError "'IF' parameters are of incorrect types"
-        end
+        (case (ty e1) of
+            TYCON "bool" => if eqType (ty e2, ty e3) 
+                            then ty e2
+                            else raise TypeError "if gets 2 exps of different types"
+          | _ => raise TypeError "if expects a boolean")
       | ty (VAR (x)) = find (x, ty_env)
-      | ty (APPLY(e, es)) = 
-        let
-          val t_list = map ty es
-          val outtype = case ty e of
-                        (FUNTY(inputlist, out)) => out
-                      | _ => raise TypeError 
-                                      "invalid formal types in apply function"
-          val formtype = case ty e of
-                        (FUNTY(inputlist, out)) => inputlist
-                      | _ => raise TypeError
-                                      "invalid result type in apply function"          
-        in if formtype = t_list
-            then outtype
-            else raise TypeError "invalid apply format"
-        end
-      | ty (LETX (LET, es, e)) = 
-        let
-          fun bind_ne ((name, exp), env) = bind (name, typeof 
-                                                      (exp, k_env, env), env)
-          val new_ty_env = foldl bind_ne ty_env es
-        in typeof (e, k_env, new_ty_env)
-        end
+      | ty (APPLY (f, args)) = 
+          (case (ty f, map ty args) of 
+              (FUNTY (input_types, output_type), arg_types) => 
+                if input_types = arg_types 
+                then output_type
+                else raise TypeError "invalid input types when applying function"
+            | (_, arg_types) => raise TypeError "apply non-function")
+      | ty (LETX (LET, bindings, e)) = 
+          let
+            fun bind_new ((left, right),old_ty_env) = bind (left, typeof (right, k_env, old_ty_env), old_ty_env)
+            val new_ty_env = foldl bind_new ty_env bindings
+            val e_type = typeof (e, k_env, new_ty_env)
+          in e_type
+          end
       | ty (LAMBDA (xs, e)) = 
-        let
-          val kind_check = foldl (fn ((name, typ), body) => kindof 
-                                                            (typ, k_env) = 
-                                                    TYPE andalso body) true xs
-          fun bind_nt ((name, typ), env) = bind (name, typ, env)
-          val new_ty_env = foldl bind_nt ty_env xs
-          val result_t = typeof (e, k_env, new_ty_env)
-        in if kind_check
-            then FUNTY(map (fn ((name, typ)) => typ) xs, result_t)
-            else raise TypeError "invalid kinds used in lambda evaluation"
+          let
+            fun check_tyex (name, tyex) = asType (tyex, k_env)
+            val input_types = map check_tyex xs
+            fun bind_new ((name, tyex), env) = bind (name, tyex, env)
+            val new_ty_env = foldl bind_new ty_env xs
+            val output_type = typeof (e, k_env, new_ty_env)
+          in FUNTY (input_types, output_type)
         end 
-      | ty (SET (x, e)) = 
-        let
-          val t1 = ty (VAR x)
-          val t2 = ty e
-        in if eqType(t1, t2)
-            then t1
-            else raise TypeError "Set operation has type mismatch"
-        end
+      | ty (SET (name, e)) = 
+          let
+            val var_type = ty (VAR name)
+            val e_type = ty e
+          in if eqType(var_type, e_type)
+              then var_type
+              else raise TypeError "types don't match in set"
+          end
       | ty (WHILEX (e1, e2)) =
-        let 
-          val t1 = ty e1
-          val t2 = ty e2
-        in if eqType(t1, booltype)
-            then unittype
-            else raise TypeError 
-                            "condition of while expression must be type BOOL"
-        end
+          if eqType (ty e1, booltype)
+          then unittype 
+          else raise TypeError "while expects a bool"
       | ty (BEGIN ([])) = unittype
       | ty (BEGIN (es)) = foldl (fn (e, typ) => ty e) unittype es
       | ty (LETX (LETSTAR, [], e)) = ty e
-      | ty (LETX (LETSTAR, (x::xs), e)) = ty (LETX (LET, [x], 
-                                                   LETX (LETSTAR, xs, e)))
+      | ty (LETX (LETSTAR, (binding::bindings), e)) = ty (LETX (LET, [ binding ], 
+                                                          LETX (LETSTAR, bindings, e)))
       (*LETREC ON P. 373*) (*~does letstar and stores body~*)
-      | ty (LETRECX (es, e)) = 
+      | ty (LETRECX (bindings, e)) = 
           let
-            fun check_tyex (((name, tyex), exp)) = asType(tyex, k_env)
-            val pass_tyex_check = map check_tyex es
-            fun bind_ne (((name, tyex), exp), env) = bind (name, tyex, env)
-            val new_ty_env = foldl bind_ne ty_env es
-            fun check_exp_tyex (((name, tyex), exp), checked) = case exp of (LAMBDA (es, e)) => eqType (tyex, typeof (exp, k_env, new_ty_env))
-                                                                              | _ => raise TypeError "right hand is not lambda"
-            val pass_check_exp_tyex = foldl check_exp_tyex true es
+            fun check_tyex (((name, tyex), exp)) = asType (tyex, k_env)
+            val binding_types = map check_tyex bindings
+            fun bind_new (((name, tyex), exp), env) = bind (name, tyex, env)
+            val new_ty_env = foldl bind_new ty_env bindings
+            fun check_exp_tyex (((name, tyex), exp), checked) = 
+              case exp of 
+                  (LAMBDA (es, e)) => (eqType (tyex, typeof (exp, k_env, new_ty_env)) andalso checked)
+                | _ => raise TypeError "right hand is not lambda"
+            val pass_check_exp_tyex = foldl check_exp_tyex true bindings
           in if pass_check_exp_tyex then typeof (e, k_env, new_ty_env)
               else raise TypeError "invalid letrec expression"
           end
@@ -1685,7 +1667,6 @@ fun typeof (e, k_env, ty_env) =
         in FORALL(xs, t)
         end
       | ty (TYAPPLY (e, ts)) = instantiate (ty e, ts, k_env)
-      (*| ty _ = raise TypeError "expression does not exist" *)
   in ty e
   end
 
@@ -1693,23 +1674,33 @@ fun typeof (e, k_env, ty_env) =
 
 fun typdef (d, k_env, ty_env) = 
   case d of
-      VAL (x, e) => (bind (x, typeof (e, k_env, ty_env), ty_env), 
-                  typeString (typeof (e, k_env, ty_env)))
-    | VALREC (name, t, e) => (* more work needed to ensure right side is LAMBDA??*)
+      VAL (name, e) => 
+        let 
+          val e_type = typeof (e, k_env, ty_env)
+          val new_ty_env = bind (name, e_type, ty_env)
+          val ts = typeString e_type 
+        in (new_ty_env, ts)
+        end
+    | VALREC (name, t, e) => 
         let
           val new_ty_env = bind(name, t, ty_env)
-          val t_e = typeof(e, k_env, new_ty_env)
-        in if eqType(t_e, t) then (new_ty_env, typeString t)
-          else raise TypeError ("in valrec: expecting type " ^ typeString t
-                                     ^ "but got type " ^ typeString t_e)
+          val e_type = typeof (e, k_env, new_ty_env)
+          val ts = typeString t
+          fun lambda_check exp = (case exp of (LAMBDA def) => true 
+                                             | _ => false)
+          val pass_type_check = (lambda_check e) 
+                                andalso eqType (e_type, t) 
+        in if pass_type_check then (new_ty_env, ts)
+          else raise TypeError "invalid valrec"
         end
-    | EXP e => typdef(VAL ("it", e), k_env, ty_env)
-    | DEFINE (name, t, (xs, e)) =>
-      let
-        val (ns, ts) = ListPair.unzip xs
-        val func_t = FUNTY(ts, t)
-      in typdef (VALREC (name, func_t, LAMBDA (xs, e)), k_env, ty_env)
-      end
+    | EXP e => typdef (VAL ("it", e), k_env, ty_env)
+    | DEFINE (name, tyex, (inputs, e)) =>
+        let
+          fun get_input_type (arg, t) = t
+          val input_types = map get_input_type inputs
+          val function_type = FUNTY(input_types, tyex)
+        in typdef (VALREC (name, function_type, LAMBDA (inputs, e)), k_env, ty_env)
+        end
 
 (* type declarations for consistency checking *)
 val _ = op eqKind  : kind      * kind      -> bool
